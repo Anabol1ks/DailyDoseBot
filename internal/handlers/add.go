@@ -125,6 +125,22 @@ func HandleSelectDayCallback(b *tele.Bot, log *zap.Logger) func(c tele.Context) 
 			}
 			state.Supplement.DaysOfWeek = jsonData
 			state.Step++
+
+			// Формируем строку выбранных дней
+			dayNames := []string{"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+			var daysText string
+			if len(days) == 7 {
+				daysText = "каждый день"
+			} else {
+				var names []string
+				for _, d := range days {
+					names = append(names, dayNames[d])
+				}
+				daysText = strings.Join(names, ", ")
+			}
+			// Удаляем клавиатуру и редактируем сообщение
+			_ = c.Edit("Выбраны дни: "+daysText, &tele.ReplyMarkup{})
+
 			return AddTextHandler(b, log)(c)
 		case "select_day":
 			data := c.Data()
@@ -216,7 +232,11 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 		case 6:
 			state.Step++
 			msg := `На какой срок нужно принимать добавку?
-			Введите продолжительность в формате 3 (для недель) или 2м (для месяцев) и если без ограничения, то просто напишите "-".`
+	
+	Введите:
+	• "3" → для недель
+	• "2м" → для месяцев
+	• "-" → если бессрочно.`
 			return c.Send(msg)
 		case 7:
 			input := strings.TrimSpace(c.Text())
@@ -224,6 +244,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			if input == "-" {
 				state.Supplement.EndDate = nil
 				state.Step++
+				_ = c.Send("✅ Приём добавки будет бессрочным.")
 				return AddTextHandler(b, log)(c)
 			}
 
@@ -252,6 +273,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 
 			state.Supplement.EndDate = &endDate
 			state.Step++
+			_ = c.Send("✅ Приём добавки до " + endDate.Format("2006-01-02"))
 			return AddTextHandler(b, log)(c)
 		case 8:
 			if state.SelectedDays == nil {
