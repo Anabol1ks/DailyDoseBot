@@ -40,6 +40,10 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 	btnDate := &tele.Btn{Unique: "date"}
 	// Обрабатывать ВСЕ текстовые сообщения для пошагового ввода:
 	b.Handle(btnDate, handlers.HandleDateCallback(b, log))
+	btnSelDay := &tele.Btn{Unique: "select_day"}
+	b.Handle(btnSelDay, handlers.HandleSelectDayCallback(b, log))
+	btnSelDayDone := &tele.Btn{Unique: "select_day_done"}
+	b.Handle(btnSelDayDone, handlers.HandleSelectDayCallback(b, log))
 
 	b.Handle(tele.OnText, handlers.AddTextHandler(b, log))
 
