@@ -31,6 +31,9 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 	b.Handle("/add", handlers.AddHandler(b, log))
 	b.Handle("➕ Добавить", handlers.AddHandler(b, log))
 
+	b.Handle("❓ Помощь", handlers.HelpHandler(b, log))
+	b.Handle("/help", handlers.HelpHandler(b, log))
+
 	btnTime := &tele.Btn{Unique: "intake_time"}
 	// Callback-хендлеры для выбора времени приёма (теперь через строку, а не структуру)
 	b.Handle(btnTime, handlers.HandleTimeCallback(b, log))
