@@ -23,8 +23,7 @@ type Supplement struct {
 	ReminderTimes   datatypes.JSON // JSON массив строк: ["08:00","12:00"]
 	ReminderEnabled bool           `gorm:"default:true"`
 	Completed       bool           `gorm:"default:false"`
-	AdditionalNotes string
-	IntakeLogs      []IntakeLog `gorm:"constraint:OnDelete:CASCADE"`
+	IntakeLogs      []IntakeLog    `gorm:"constraint:OnDelete:CASCADE"`
 }
 
 func (s *Supplement) BeforeCreate(tx *gorm.DB) (err error) {

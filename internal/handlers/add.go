@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 	tele "gopkg.in/telebot.v4"
+	"gorm.io/datatypes"
 )
 
 var (
@@ -74,21 +75,22 @@ func initAddButtons() {
 
 // --- Создание клавиатуры дней недели ---
 func createWeekdayInlineMarkup(selected map[int]bool) *tele.ReplyMarkup {
-	days := []string{"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+	days := []string{"✖️ Пн", "✖️ Вт", "✖️ Ср", "✖️ Чт", "✖️ Пт", "✖️ Сб", "✖️ Вс"}
 	markup := &tele.ReplyMarkup{}
 	var row []tele.Btn
 	for i, day := range days {
 		label := day
 		if selected[i] {
-			label = "✅ " + day
+			label = strings.Replace(label, "✖️", "✅", 1)
 		}
 		btn := markup.Data(label, "select_day", fmt.Sprintf("%d", i))
 		row = append(row, btn)
 	}
 	doneBtn := markup.Data("Готово", "select_day_done")
 	markup.Inline(
-		markup.Row(row...),
-		markup.Row(doneBtn),
+		markup.Row(row[0], row[1], row[2]),
+		markup.Row(row[3], row[4], row[5]),
+		markup.Row(row[6], doneBtn),
 	)
 	return markup
 }
@@ -281,7 +283,85 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			}
 			markup := createWeekdayInlineMarkup(state.SelectedDays)
 			return c.Send("Выберите дни недели приёма добавки.\nНажмите 'Готово', когда закончите выбор.\nЕсли ничего не выберете, будет 'каждый день'.", markup)
+
 		case 9:
+			state.Step++
+
+			msg := `⏰ В какое время напоминать о приёме?
+Ты можешь указать несколько значений, например: 08:00, 13:00.
+Или отправь нет, если напоминания не нужны`
+			return c.Send(msg)
+
+		case 10:
+			input := strings.TrimSpace(c.Text())
+
+			if strings.ToLower(input) == "нет" {
+				state.Supplement.ReminderEnabled = false
+				state.Supplement.ReminderTimes = datatypes.JSON([]byte("[]"))
+				state.Step++
+				_ = c.Delete() // удалить сообщение пользователя
+				_ = c.Send("🔕 Напоминания отключены.", &tele.ReplyMarkup{})
+				return AddTextHandler(b, log)(c)
+			}
+
+			times := strings.Split(input, ",")
+			var cleanedTimes []string
+			timeRegex := regexp.MustCompile(`^(?:[01]\d|2[0-3]):[0-5]\d$`)
+
+			for _, t := range times {
+				t = strings.TrimSpace(t)
+				if !timeRegex.MatchString(t) {
+					return c.Send("❌ Неверный формат времени. Используйте формат HH:MM, например: 08:00, 13:00.\nИли отправьте 'нет' для отказа от напоминаний.")
+				}
+				// Проверяем кратность 30 минутам
+				parts := strings.Split(t, ":")
+				minutes, err := strconv.Atoi(parts[1])
+				if err != nil || (minutes != 0 && minutes != 30) {
+					return c.Send("❌ Время должно быть кратно 30 минутам (допустимы только минуты '00' или '30'). Например: 08:00, 13:30.\nИли отправьте 'нет' для отказа от напоминаний.")
+				}
+				cleanedTimes = append(cleanedTimes, t)
+			}
+
+			jsonTimes, err := json.Marshal(cleanedTimes)
+			if err != nil {
+				return c.Send("Произошла ошибка при обработке времени.")
+			}
+
+			state.Supplement.ReminderTimes = jsonTimes
+			state.Supplement.ReminderEnabled = true
+			state.Step++
+
+			_ = c.Delete() // удалить сообщение пользователя
+			_ = c.Send(fmt.Sprintf("⏰ Напоминания установлены на: %s", strings.Join(cleanedTimes, ", ")), &tele.ReplyMarkup{})
+
+			return AddTextHandler(b, log)(c)
+		case 11:
+			msg := `🩺 Вот что я записал:
+			• Название: ` + state.Supplement.Name + `
+			• Дозировка: ` + state.Supplement.Dosage + `
+			• Время приёма: ` + state.Supplement.IntakeTime + `
+			• Принимать с едой: ` + fmt.Sprintf("%v", state.Supplement.WithFood) + `
+			• Дни недели: ` + fmt.Sprintf("%v", state.Supplement.DaysOfWeek) + `
+			• Дата начала: ` + state.Supplement.StartDate.Format("2006-01-02") + `
+			• Дата окончания: `
+			if state.Supplement.EndDate != nil {
+				msg += state.Supplement.EndDate.Format("2006-01-02")
+			} else {
+				msg += "бессрочно"
+			}
+			if state.Supplement.ReminderEnabled {
+				msg += `
+			• Время напоминания: ` + fmt.Sprintf("%v", state.Supplement.ReminderTimes) + `
+			`
+			} else {
+				msg += `
+			• Напоминания отключены
+			`
+			}
+			state.Step++
+			_ = c.Send(msg)
+			return AddTextHandler(b, log)(c)
+		case 12:
 			log.Info("Step", zap.Int("step", state.Step))
 
 			// Далее можешь переходить к следующему шагу или сохранить
