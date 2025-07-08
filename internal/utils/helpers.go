@@ -34,7 +34,8 @@ func MainMenuKeyboard() *tele.ReplyMarkup {
 	btnAdd := menu.Text("➕ Добавить")
 	btnList := menu.Text("📃 Список")
 	btnHelp := menu.Text("❓ Помощь")
-	menu.Reply(menu.Row(btnAdd, btnList, btnHelp))
+	btnLog := menu.Text("📊 Лог")
+	menu.Reply(menu.Row(btnAdd, btnList, btnLog, btnHelp))
 	return menu
 }
 

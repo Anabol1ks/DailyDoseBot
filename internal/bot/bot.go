@@ -51,8 +51,15 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 	btnSelDayDone := &tele.Btn{Unique: "select_day_done"}
 	b.Handle(btnSelDayDone, handlers.HandleSelectDayCallback(b, log))
 
+	b.Handle("/log", handlers.LogHandler(b, log))
+	b.Handle("📊 Лог", handlers.LogHandler(b, log))
+	// Кнопка для ручной отметки приёма из /log
+	b.Handle(&tele.Btn{Unique: "intake_accept_log"}, handlers.HandleIntakeAcceptLogCallback(b, log))
+
 	b.Handle(tele.OnText, handlers.AddTextHandler(b, log))
 	handlers.RegisterListCallbacks(b, log)
+	b.Handle(&tele.Btn{Unique: "intake_accept"}, handlers.HandleIntakeAcceptCallback(b, log))
+	handlers.StartNotifier(b, log)
 
 	log.Info("Bot started")
 
