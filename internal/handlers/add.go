@@ -18,15 +18,6 @@ import (
 	"gorm.io/datatypes"
 )
 
-// Форматирует дату в виде "24 июня 2025"
-func formatDateRu(t time.Time) string {
-	months := []string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}
-	day := t.Day()
-	month := months[int(t.Month())-1]
-	year := t.Year()
-	return fmt.Sprintf("%d %s %d", day, month, year)
-}
-
 var (
 	AddTimeButtons *tele.ReplyMarkup
 	BtnMorning     tele.Btn
@@ -244,7 +235,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			// Удаляем сообщение пользователя (если возможно)
 			_ = c.Delete()
 			// Меняем текст сообщения бота (ищем последнее сообщение AddDateButtons)
-			_ = c.Send("📅 Дата выбрана: " + formatDateRu(parsed))
+			_ = c.Send("📅 Дата выбрана: " + utils.FormatDateRu(parsed))
 			// Сразу переходим к следующему шагу:
 			return AddTextHandler(b, log)(c)
 		case 6:
@@ -389,7 +380,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			}
 			endDate := "бессрочно"
 			if state.Supplement.EndDate != nil {
-				endDate = formatDateRu(*state.Supplement.EndDate)
+				endDate = utils.FormatDateRu(*state.Supplement.EndDate)
 			}
 			intakeTime := state.Supplement.IntakeTime
 			switch intakeTime {
@@ -408,7 +399,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 				"• Время приёма: " + intakeTime + "\n" +
 				"• С едой: " + withFood + "\n" +
 				"• Дни недели: " + daysText + "\n" +
-				"• Дата начала: " + formatDateRu(state.Supplement.StartDate) + "\n" +
+				"• Дата начала: " + utils.FormatDateRu(state.Supplement.StartDate) + "\n" +
 				"• Дата окончания: " + endDate + "\n" +
 				"• Напоминания: " + reminderTimes
 			state.Step++

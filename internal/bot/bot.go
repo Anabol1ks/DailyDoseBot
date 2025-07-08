@@ -31,6 +31,9 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 	b.Handle("/add", handlers.AddHandler(b, log))
 	b.Handle("➕ Добавить", handlers.AddHandler(b, log))
 
+	b.Handle("📃 Список", handlers.ListHandler(b, log))
+	b.Handle("/list", handlers.ListHandler(b, log))
+
 	b.Handle("❓ Помощь", handlers.HelpHandler(b, log))
 	b.Handle("/help", handlers.HelpHandler(b, log))
 
@@ -49,6 +52,7 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 	b.Handle(btnSelDayDone, handlers.HandleSelectDayCallback(b, log))
 
 	b.Handle(tele.OnText, handlers.AddTextHandler(b, log))
+	handlers.RegisterListCallbacks(b, log)
 
 	log.Info("Bot started")
 

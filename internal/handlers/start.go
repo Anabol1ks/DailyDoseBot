@@ -46,7 +46,7 @@ func StartHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 /add
 
 Чтобы увидеть список своих добавок:
-/my_supplements
+/list
 
 Если будут вопросы, пиши ❤️
 `, name)
