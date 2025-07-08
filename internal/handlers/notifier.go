@@ -18,7 +18,7 @@ import (
 func StartNotifier(bot *tele.Bot, log *zap.Logger) {
 	c := cron.New()
 	// Каждые 30 минут (например, 00, 30)
-	c.AddFunc("* * * * *", func() {
+	c.AddFunc("0,30 * * * *", func() {
 		log.Info("Запуск напоминания")
 		SendReminders(bot, time.Now())
 	})
