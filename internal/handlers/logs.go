@@ -3,7 +3,9 @@ package handlers
 import (
 	"DailyDoseBot/internal/db"
 	"DailyDoseBot/internal/models"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,25 +32,47 @@ func LogHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 		}
 
 		today := time.Now().Truncate(24 * time.Hour)
-		var rows []tele.Row
 		markup := &tele.ReplyMarkup{}
+		var rows []tele.Row
 		for _, s := range supplements {
-			// Проверяем IntakeLog на сегодня
-			var logEntry models.IntakeLog
-			taken := false
-			err := db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ?", user.ID, s.ID, today).First(&logEntry).Error
-			if err == nil && logEntry.Taken {
-				taken = true
+			// Получаем список времён напоминаний
+			var times []string
+			if s.ReminderEnabled && len(s.ReminderTimes) > 2 {
+				_ = db.DB.Statement.Context // для совместимости
+				_ = json.Unmarshal([]byte(s.ReminderTimes), &times)
 			}
-			name := s.Name
-			if taken {
-				// Уже отмечено
-				row := markup.Row(markup.Text(fmt.Sprintf("✅ %s — принято сегодня", name)))
-				rows = append(rows, row)
-			} else {
-				// Не отмечено, добавить кнопку
-				btn := markup.Data(fmt.Sprintf("❌ %s — ещё не принято", name), "intake_accept_log", s.ID.String())
-				row := markup.Row(btn)
+			if len(times) == 0 {
+				// Если нет времён — просто как раньше
+				var logEntry models.IntakeLog
+				err := db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ?", user.ID, s.ID, today).First(&logEntry).Error
+				if err == nil && logEntry.Taken {
+					row := markup.Row(markup.Text(fmt.Sprintf("✅ %s — принято сегодня", s.Name)))
+					rows = append(rows, row)
+				} else {
+					btn := markup.Data(fmt.Sprintf("❌ %s — ещё не принято", s.Name), "intake_accept_log", s.ID.String()+"|")
+					row := markup.Row(btn)
+					rows = append(rows, row)
+				}
+				continue
+			}
+			// Для каждой добавки с несколькими временами
+			allTaken := true
+			for _, t := range times {
+				var logEntry models.IntakeLog
+				err := db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ? AND intake_time = ?", user.ID, s.ID, today, t).First(&logEntry).Error
+				if err == nil && logEntry.Taken {
+					row := markup.Row(markup.Text(fmt.Sprintf("✅ %s (%s)", s.Name, t)))
+					rows = append(rows, row)
+				} else {
+					allTaken = false
+					btn := markup.Data(fmt.Sprintf("❌ %s (%s)", s.Name, t), "intake_accept_log", s.ID.String()+"|"+t)
+					row := markup.Row(btn)
+					rows = append(rows, row)
+				}
+			}
+			if allTaken && len(times) > 1 {
+				// Если все времена отмечены, добавить итоговую строку
+				row := markup.Row(markup.Text(fmt.Sprintf("✅ %s — все приёмы за сегодня выполнены", s.Name)))
 				rows = append(rows, row)
 			}
 		}
@@ -61,7 +85,13 @@ func LogHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 func HandleIntakeAcceptLogCallback(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 	return func(c tele.Context) error {
 		userID := c.Sender().ID
-		suppIDStr := c.Data()
+		data := c.Data() // s.ID|time
+		parts := strings.SplitN(data, "|", 2)
+		suppIDStr := parts[0]
+		intakeTime := ""
+		if len(parts) > 1 {
+			intakeTime = parts[1]
+		}
 		suppUUID, err := uuid.Parse(suppIDStr)
 		if err != nil {
 			return c.Respond(&tele.CallbackResponse{Text: "Ошибка ID"})
@@ -79,7 +109,7 @@ func HandleIntakeAcceptLogCallback(b *tele.Bot, log *zap.Logger) func(c tele.Con
 		today := time.Now().Truncate(24 * time.Hour)
 		// Проверяем, есть ли уже IntakeLog
 		var logEntry models.IntakeLog
-		err = db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ?", user.ID, supplement.ID, today).First(&logEntry).Error
+		err = db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ? AND intake_time = ?", user.ID, supplement.ID, today, intakeTime).First(&logEntry).Error
 		if err == nil {
 			// Уже есть запись, обновим
 			logEntry.Taken = true
@@ -90,6 +120,7 @@ func HandleIntakeAcceptLogCallback(b *tele.Bot, log *zap.Logger) func(c tele.Con
 				UserID:       user.ID,
 				SupplementID: supplement.ID,
 				IntakeDate:   today,
+				IntakeTime:   intakeTime,
 				Taken:        true,
 			}
 			db.DB.Create(&logEntry)

@@ -17,7 +17,7 @@ func main() {
 	cfg := config.Load(log)
 
 	db.ConnectDB(cfg, log)
-	// db.Migrate(log)
+	db.Migrate(log)
 
 	bot.BotInit(cfg, log)
 }

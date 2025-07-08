@@ -13,6 +13,7 @@ type IntakeLog struct {
 	UserID       uuid.UUID `gorm:"index;not null"`
 	SupplementID uuid.UUID `gorm:"index;not null"`
 	IntakeDate   time.Time `gorm:"index;not null"` // Дата, за которую зафиксирован приём
+	IntakeTime   string    `gorm:"index;not null"` // Время приёма (например, "08:00" или "morning")
 	Taken        bool      `gorm:"default:false"`  // Был ли приём
 }
 
