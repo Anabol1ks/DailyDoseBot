@@ -22,6 +22,11 @@ func StartNotifier(bot *tele.Bot, log *zap.Logger) {
 		log.Info("Запуск напоминания")
 		SendReminders(bot, time.Now())
 	})
+	c.AddFunc("0 7 * * 1", func() {
+		log.Info("Отправка еженедельной статистики")
+		SendWeeklyStats(bot, log)
+	})
+
 	c.Start()
 }
 
@@ -67,7 +72,10 @@ func HandleIntakeAcceptCallback(b *tele.Bot, log *zap.Logger) func(c tele.Contex
 			return c.Respond(&tele.CallbackResponse{Text: "Ошибка данных"})
 		}
 		suppIDStr := parts[0]
-		// intakeTime := parts[1] // пока не используется
+		intakeTime := ""
+		if len(parts) > 1 {
+			intakeTime = parts[1]
+		}
 		suppUUID, err := uuid.Parse(suppIDStr)
 		if err != nil {
 			return c.Respond(&tele.CallbackResponse{Text: "Ошибка ID"})
@@ -85,7 +93,7 @@ func HandleIntakeAcceptCallback(b *tele.Bot, log *zap.Logger) func(c tele.Contex
 		}
 		// Проверяем, есть ли уже IntakeLog
 		var logEntry models.IntakeLog
-		err = db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ?", user.ID, supplement.ID, today).First(&logEntry).Error
+		err = db.DB.Where("user_id = ? AND supplement_id = ? AND intake_date = ? AND intake_time = ?", user.ID, supplement.ID, today, intakeTime).First(&logEntry).Error
 		if err == nil {
 			// Уже есть запись, обновим
 			logEntry.Taken = true
@@ -96,6 +104,7 @@ func HandleIntakeAcceptCallback(b *tele.Bot, log *zap.Logger) func(c tele.Contex
 				UserID:       user.ID,
 				SupplementID: supplement.ID,
 				IntakeDate:   today,
+				IntakeTime:   intakeTime,
 				Taken:        true,
 			}
 			db.DB.Create(&logEntry)

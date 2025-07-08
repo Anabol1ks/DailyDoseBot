@@ -53,6 +53,8 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 
 	b.Handle("/log", handlers.LogHandler(b, log))
 	b.Handle("📊 Лог", handlers.LogHandler(b, log))
+	b.Handle("/status", handlers.StatusHandler(b))
+	b.Handle("📊 Статус", handlers.StatusHandler(b))
 	// Кнопка для ручной отметки приёма из /log
 	b.Handle(&tele.Btn{Unique: "intake_accept_log"}, handlers.HandleIntakeAcceptLogCallback(b, log))
 
