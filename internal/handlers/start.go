@@ -3,6 +3,7 @@ package handlers
 import (
 	"DailyDoseBot/internal/db"
 	"DailyDoseBot/internal/models"
+	"DailyDoseBot/internal/utils"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -18,6 +19,7 @@ func StartHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 		var user models.User
 		result := db.DB.First(&user, "telegram_id = ?", telegramID)
 
+		menu := utils.MainMenuKeyboard()
 		if result.Error != nil {
 			user = models.User{
 				TelegramID: telegramID,
@@ -48,19 +50,12 @@ func StartHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 
 Если будут вопросы, пиши ❤️
 `, name)
-			return c.Send(msg)
+			return c.Send(msg, menu)
 		}
 
 		msg := fmt.Sprintf("👋 Привет снова, %s!\nРады видеть тебя, продолжаем следить за твоим здоровьем 💪", user.Name)
-		menu := &tele.ReplyMarkup{ResizeKeyboard: true}
 
-		// Кнопка, при нажатии которой пользователь отправляет команду /add
-		btnAdd := menu.Text("➕ Добавить")
-
-		btnHelp := menu.Text("❓ Помощь")
-
-		// Назначаем кнопки в одной строке
-		menu.Reply(menu.Row(btnAdd, btnHelp))
+		// Кнопки уже назначены в utils.MainMenuKeyboard()
 		return c.Send(msg, menu)
 	}
 }

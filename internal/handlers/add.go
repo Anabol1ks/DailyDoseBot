@@ -18,6 +18,15 @@ import (
 	"gorm.io/datatypes"
 )
 
+// Форматирует дату в виде "24 июня 2025"
+func formatDateRu(t time.Time) string {
+	months := []string{"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"}
+	day := t.Day()
+	month := months[int(t.Month())-1]
+	year := t.Year()
+	return fmt.Sprintf("%d %s %d", day, month, year)
+}
+
 var (
 	AddTimeButtons *tele.ReplyMarkup
 	BtnMorning     tele.Btn
@@ -176,7 +185,7 @@ func AddHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 		}
 		addStates.Unlock()
 
-		return c.Send("🩺 Введи название добавки, которую хочешь добавить:", utils.CloseMenu(c))
+		return c.Send("🩺 Как называется добавка, которую ты хочешь добавить?\n\nНапример: Витамин D, Магний, Омега-3.\n\nМожешь просто скопировать название с упаковки.", utils.CancelKeyboard())
 	}
 }
 
@@ -184,6 +193,13 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 	return func(c tele.Context) error {
 		userID := c.Sender().ID
 
+		// Обработка нажатия кнопки отмены
+		if c.Text() == "❌ Отмена" {
+			addStates.Lock()
+			delete(addStates.m, userID)
+			addStates.Unlock()
+			return c.Send("Добавление отменено.", utils.MainMenuKeyboard())
+		}
 		// Если пользователь ввёл команду (начинается с "/"), сбрасываем состояние добавления
 		if len(c.Text()) > 0 && c.Text()[0] == '/' {
 			addStates.Lock()
@@ -204,15 +220,15 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 		case 1:
 			state.Supplement.Name = c.Text()
 			state.Step++
-			return c.Send("💊 Укажи дозировку в свободной форме (например, '10 000 МЕ/день'):")
+			return c.Send("💊 Укажи дозировку добавки.\n\nНапример: 10 000 МЕ/день, 2 капсулы утром, 400 мг.\n\nПиши так, как тебе удобно — главное, чтобы ты сам понял! 😊", utils.CancelKeyboard())
 
 		case 2:
 			state.Supplement.Dosage = c.Text()
-			return c.Send("🕒 Когда обычно принимаешь эту добавку?", AddTimeButtons)
+			return c.Send("🕒 Когда обычно принимаешь эту добавку?\n\nВыбери подходящее время:", AddTimeButtons)
 		case 3:
-			return c.Send("😋 Принимается с едой?", AddFoodButtons)
+			return c.Send("😋 Принимаешь добавку вместе с едой?\n\nЭто важно для некоторых витаминов и минералов.\n\nВыбери вариант:", AddFoodButtons)
 		case 4:
-			return c.Send("Когда начинаешь принимать добавку?", AddDateButtons)
+			return c.Send("📅 Когда начинаешь принимать добавку?\n\nМожешь выбрать 'Сегодня' или указать другую дату.", AddDateButtons)
 		case 5:
 			// Ожидаем текстовую дату
 			log.Info("Step((()))", zap.Int("step", state.Step))
@@ -220,7 +236,7 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			dateStr := c.Text()
 			parsed, err := parseDate(dateStr)
 			if err != nil {
-				return c.Send("Некорректный формат даты. Пример: 2025-07-06")
+				return c.Send("❌ Некорректный формат даты.\nПожалуйста, введи дату в формате ГГГГ-ММ-ДД, например: 2025-07-06")
 			}
 			state.Supplement.StartDate = parsed
 			state.Step++
@@ -228,18 +244,20 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			// Удаляем сообщение пользователя (если возможно)
 			_ = c.Delete()
 			// Меняем текст сообщения бота (ищем последнее сообщение AddDateButtons)
-			_ = c.Send("Выбрана дата: " + parsed.Format("2006-01-02"))
+			_ = c.Send("📅 Дата выбрана: " + formatDateRu(parsed))
 			// Сразу переходим к следующему шагу:
 			return AddTextHandler(b, log)(c)
 		case 6:
 			state.Step++
-			msg := `На какой срок нужно принимать добавку?
-	
-	Введите:
-	• "3" → для недель
-	• "2м" → для месяцев
-	• "-" → если бессрочно.`
-			return c.Send(msg)
+			msg := `⏳ На какой срок планируешь принимать добавку?
+
+Напиши:
+• "3" — если на 3 недели
+• "2м" — если на 2 месяца
+• "-" — если бессрочно
+
+Пример: 4 (4 недели), 1м (1 месяц), - (бессрочно)`
+			return c.Send(msg, utils.CancelKeyboard())
 		case 7:
 			input := strings.TrimSpace(c.Text())
 
@@ -260,17 +278,17 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			if weeksRegex.MatchString(input) {
 				weeks, err := strconv.Atoi(input)
 				if err != nil {
-					return c.Send("Ошибка при обработке числа недель. Попробуйте снова.")
+					return c.Send("❌ Не удалось обработать число недель. Попробуй ещё раз, например: 3")
 				}
 				endDate = startDate.AddDate(0, 0, weeks*7)
 			} else if matches := monthsRegex.FindStringSubmatch(input); matches != nil {
 				months, err := strconv.Atoi(matches[1])
 				if err != nil {
-					return c.Send("Ошибка при обработке числа месяцев. Попробуйте снова.")
+					return c.Send("❌ Не удалось обработать число месяцев. Попробуй ещё раз, например: 2м")
 				}
 				endDate = startDate.AddDate(0, months, 0)
 			} else {
-				return c.Send("Неверный формат. Введите количество недель, например '3', либо количество месяцев, например '2м', или '-' для бессрочного приема.")
+				return c.Send("❌ Неверный формат.\n\nВведи количество недель (например, 3), месяцев (например, 2м) или '-' для бессрочного приёма.")
 			}
 
 			state.Supplement.EndDate = &endDate
@@ -282,14 +300,15 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 				state.SelectedDays = make(map[int]bool)
 			}
 			markup := createWeekdayInlineMarkup(state.SelectedDays)
-			return c.Send("Выберите дни недели приёма добавки.\nНажмите 'Готово', когда закончите выбор.\nЕсли ничего не выберете, будет 'каждый день'.", markup)
+			return c.Send("📆 В какие дни недели будешь принимать добавку?\n\nОтметь нужные дни и нажми 'Готово'.\nЕсли ничего не выберешь — будет 'каждый день'.", markup)
 
 		case 9:
 			state.Step++
 
 			msg := `⏰ В какое время напоминать о приёме?
-Ты можешь указать несколько значений, например: 08:00, 13:00.
-Или отправь нет, если напоминания не нужны`
+
+Можешь указать несколько вариантов через запятую, например: 08:00, 13:30
+Или напиши "нет", если напоминания не нужны.`
 			return c.Send(msg)
 
 		case 10:
@@ -311,20 +330,20 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 			for _, t := range times {
 				t = strings.TrimSpace(t)
 				if !timeRegex.MatchString(t) {
-					return c.Send("❌ Неверный формат времени. Используйте формат HH:MM, например: 08:00, 13:00.\nИли отправьте 'нет' для отказа от напоминаний.")
+					return c.Send("❌ Неверный формат времени.\n\nИспользуй формат ЧЧ:ММ, например: 08:00, 13:30.\n\nИли напиши 'нет', если не нужны напоминания.")
 				}
 				// Проверяем кратность 30 минутам
 				parts := strings.Split(t, ":")
 				minutes, err := strconv.Atoi(parts[1])
 				if err != nil || (minutes != 0 && minutes != 30) {
-					return c.Send("❌ Время должно быть кратно 30 минутам (допустимы только минуты '00' или '30'). Например: 08:00, 13:30.\nИли отправьте 'нет' для отказа от напоминаний.")
+					return c.Send("❌ Время должно быть кратно 30 минутам (допустимы только минуты '00' или '30'). Например: 08:00, 13:30.\n\nИли напиши 'нет', если не нужны напоминания.")
 				}
 				cleanedTimes = append(cleanedTimes, t)
 			}
 
 			jsonTimes, err := json.Marshal(cleanedTimes)
 			if err != nil {
-				return c.Send("Произошла ошибка при обработке времени.")
+				return c.Send("❌ Произошла ошибка при обработке времени. Попробуй ещё раз.")
 			}
 
 			state.Supplement.ReminderTimes = jsonTimes
@@ -336,28 +355,62 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 
 			return AddTextHandler(b, log)(c)
 		case 11:
-			msg := `🩺 Вот что я записал:
-			• Название: ` + state.Supplement.Name + `
-			• Дозировка: ` + state.Supplement.Dosage + `
-			• Время приёма: ` + state.Supplement.IntakeTime + `
-			• Принимать с едой: ` + fmt.Sprintf("%v", state.Supplement.WithFood) + `
-			• Дни недели: ` + fmt.Sprintf("%v", state.Supplement.DaysOfWeek) + `
-			• Дата начала: ` + state.Supplement.StartDate.Format("2006-01-02") + `
-			• Дата окончания: `
-			if state.Supplement.EndDate != nil {
-				msg += state.Supplement.EndDate.Format("2006-01-02")
+			// Формируем красивый итоговый вывод
+			dayNames := []string{"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+			var daysList []int
+			_ = json.Unmarshal(state.Supplement.DaysOfWeek, &daysList)
+			var daysText string
+			if len(daysList) == 7 {
+				daysText = "каждый день"
 			} else {
-				msg += "бессрочно"
+				var names []string
+				for _, d := range daysList {
+					if d >= 0 && d < len(dayNames) {
+						names = append(names, dayNames[d])
+					}
+				}
+				daysText = strings.Join(names, ", ")
 			}
+			reminderTimes := "—"
 			if state.Supplement.ReminderEnabled {
-				msg += `
-			• Время напоминания: ` + fmt.Sprintf("%v", state.Supplement.ReminderTimes) + `
-			`
+				var times []string
+				_ = json.Unmarshal(state.Supplement.ReminderTimes, &times)
+				if len(times) > 0 {
+					reminderTimes = strings.Join(times, ", ")
+				}
 			} else {
-				msg += `
-			• Напоминания отключены
-			`
+				reminderTimes = "Отключены"
 			}
+			withFood := "—"
+			if state.Supplement.WithFood {
+				withFood = "Да"
+			} else {
+				withFood = "Нет"
+			}
+			endDate := "бессрочно"
+			if state.Supplement.EndDate != nil {
+				endDate = formatDateRu(*state.Supplement.EndDate)
+			}
+			intakeTime := state.Supplement.IntakeTime
+			switch intakeTime {
+			case "morning":
+				intakeTime = "Утро"
+			case "afternoon":
+				intakeTime = "День"
+			case "evening":
+				intakeTime = "Вечер"
+			case "any":
+				intakeTime = "Любое время"
+			}
+			msg := "🩺 Вот что я записал:\n" +
+				"• Название: " + state.Supplement.Name + "\n" +
+				"• Дозировка: " + state.Supplement.Dosage + "\n" +
+				"• Время приёма: " + intakeTime + "\n" +
+				"• С едой: " + withFood + "\n" +
+				"• Дни недели: " + daysText + "\n" +
+				"• Дата начала: " + formatDateRu(state.Supplement.StartDate) + "\n" +
+				"• Дата окончания: " + endDate + "\n" +
+				"• Напоминания: " + reminderTimes
 			state.Step++
 			_ = c.Send(msg)
 			return AddTextHandler(b, log)(c)
@@ -378,12 +431,12 @@ func AddTextHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 
 			state.Supplement.UserID = user.ID
 
-			// if err := db.DB.Create(&state.Supplement).Error; err != nil {
-			// 	return c.Send("Ошибка при сохранении добавки.")
-			// }
+			if err := db.DB.Create(&state.Supplement).Error; err != nil {
+				return c.Send("Ошибка при сохранении добавки.")
+			}
 			log.Info("Добавка успешно сохранена", zap.Any("добавка", state.Supplement))
 
-			return c.Send("✅ Добавка успешно сохранена!")
+			return c.Send("✅ Добавка успешно сохранена!", utils.MainMenuKeyboard())
 		}
 
 		return nil
