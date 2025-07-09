@@ -5,6 +5,7 @@ import (
 	"DailyDoseBot/internal/models"
 	"DailyDoseBot/internal/utils"
 	"fmt"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -33,6 +34,26 @@ func supplementInfoText(s models.Supplement) string {
 		intakeTime = "Любое время"
 	}
 
+	// Дни недели приёма
+	var daysOfWeek []int
+	var daysText string
+	if err := utils.UnmarshalJSON(s.DaysOfWeek, &daysOfWeek); err == nil && len(daysOfWeek) > 0 {
+		daysRu := []string{"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"}
+		if len(daysOfWeek) == 7 {
+			daysText = "Каждый день"
+		} else {
+			var names []string
+			for _, d := range daysOfWeek {
+				if d >= 0 && d < 7 {
+					names = append(names, daysRu[d])
+				}
+			}
+			daysText = "" + strings.Join(names, ", ")
+		}
+	} else {
+		daysText = "—"
+	}
+
 	// Время напоминания
 	reminder := "—"
 	if s.ReminderEnabled && len(s.ReminderTimes) > 2 { // []
@@ -45,7 +66,8 @@ func supplementInfoText(s models.Supplement) string {
 		reminder = "Отключены"
 	}
 
-	return fmt.Sprintf("Добавка: %s\nДозировка: %s\nВремя приёма: %s\nС едой: %v\nДата начала: %s\nДата окончания: %s\nНапоминания: %s", s.Name, s.Dosage, intakeTime, withFood, utils.FormatDateRu(s.StartDate), endDate, reminder)
+	return fmt.Sprintf("Добавка: %s\nДозировка: %s\nВремя приёма: %s\nДни приёма: %s\nС едой: %v\nДата начала: %s\nДата окончания: %s\nНапоминания: %s",
+		s.Name, s.Dosage, intakeTime, daysText, withFood, utils.FormatDateRu(s.StartDate), endDate, reminder)
 }
 func supplementDetailHandler(b *tele.Bot, log *zap.Logger) func(c tele.Context) error {
 	return func(c tele.Context) error {
