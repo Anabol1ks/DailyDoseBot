@@ -38,7 +38,27 @@ func SendReminders(bot *tele.Bot, now time.Time) {
 		return
 	}
 	current := now.Format("15:04")
+	todayWeekday := int(now.Weekday())
+	if todayWeekday == 0 {
+		todayWeekday = 6 // Go: Sunday=0, а у нас Вс=6
+	} else {
+		todayWeekday-- // Go: Monday=1, а у нас Пн=0
+	}
 	for _, s := range supplements {
+		// Проверяем, нужно ли принимать сегодня
+		var daysOfWeek []int
+		if err := utils.UnmarshalJSON(s.DaysOfWeek, &daysOfWeek); err == nil && len(daysOfWeek) > 0 {
+			found := false
+			for _, d := range daysOfWeek {
+				if d == todayWeekday {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue // Сегодня не нужно принимать
+			}
+		}
 		var times []string
 		_ = utils.UnmarshalJSON(s.ReminderTimes, &times)
 		for _, t := range times {

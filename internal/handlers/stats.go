@@ -42,6 +42,11 @@ func buildStatsMessageForUser(user models.User) string {
 	for i := days - 1; i >= 0; i-- {
 		day := today.AddDate(0, 0, -i)
 		weekday := int(day.Weekday())
+		if weekday == 0 {
+			weekday = 6 // Go: Sunday=0, а у нас Вс=6
+		} else {
+			weekday-- // Go: Monday=1, а у нас Пн=0
+		}
 
 		var supplements []models.Supplement
 		if err := db.DB.Where("user_id = ?", user.ID).Find(&supplements).Error; err != nil {

@@ -33,6 +33,31 @@ func StatusHandler(b *tele.Bot) func(c tele.Context) error {
 		var lines []string
 
 		for _, s := range supplements {
+			// Проверяем, нужно ли принимать сегодня
+			addToday := true
+			if len(s.DaysOfWeek) > 2 {
+				var daysOfWeek []int
+				_ = json.Unmarshal([]byte(s.DaysOfWeek), &daysOfWeek)
+				todayWeekday := int(today.Weekday())
+				if todayWeekday == 0 {
+					todayWeekday = 6 // Go: Sunday=0, а у нас Вс=6
+				} else {
+					todayWeekday-- // Go: Monday=1, а у нас Пн=0
+				}
+				found := false
+				for _, d := range daysOfWeek {
+					if d == todayWeekday {
+						found = true
+						break
+					}
+				}
+				if !found {
+					addToday = false
+				}
+			}
+			if !addToday {
+				continue
+			}
 			var times []string
 			if s.ReminderEnabled && len(s.ReminderTimes) > 2 {
 				_ = json.Unmarshal([]byte(s.ReminderTimes), &times)
