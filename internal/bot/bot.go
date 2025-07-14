@@ -10,6 +10,7 @@ import (
 )
 
 func BotInit(cfg *config.Config, log *zap.Logger) {
+
 	handlers.InitHandlers()
 	pref := tele.Settings{
 		Token:  cfg.TGtoken,
@@ -21,6 +22,13 @@ func BotInit(cfg *config.Config, log *zap.Logger) {
 		log.Error("Failed to create bot", zap.Error(err))
 		return
 	}
+
+	// Временная команда для теста debug-статистики (только для себя)
+	b.Handle("/debugstats", func(c tele.Context) error {
+		userID := c.Sender().ID
+		handlers.SendDebugStats(b, userID)
+		return nil
+	})
 
 	b.Handle("/hello", func(c tele.Context) error {
 		return c.Send("Hello!")
